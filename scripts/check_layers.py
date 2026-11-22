@@ -34,8 +34,10 @@ MODULE_BAND = {
 SRC = "decompiler/crates/unlace-decomp/src"
 ALLOWLIST = "scripts/layers-allowlist.txt"
 TOKEN = re.compile(r"\w+|::|\S")
+WORD = re.compile(r"\w+")
 CFG_TEST = re.compile(r"#\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]")
-INNER_CFG_TEST = re.compile(r"#\s*!\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]")
+FILE_CFG_TEST = re.compile(r"\A\s*(?:#\s*!\s*\[[^\]]*\]\s*)*#\s*!\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]")
+INNER_TEST_MOD = re.compile(r"\bmod\s+\w+\s*\{\s*#\s*!\s*\[\s*cfg\s*\(\s*test\s*\)\s*\]")
 
 
 def is_test_file(path: Path) -> bool:
@@ -76,7 +78,9 @@ def strip_literals(text: str) -> str:
             out.append("' '")
         else:
             if c.isalnum() or c == "_":
-                word = re.match(r"\w+", text[i:]).group()
+                if text.startswith("r#", i) and (raw_ident := WORD.match(text, i + 2)):
+                    i += 2
+                word = WORD.match(text, i).group()
                 out.append(word)
                 i += len(word)
                 continue
@@ -86,7 +90,8 @@ def strip_literals(text: str) -> str:
 
 
 def item_end(text: str, start: int) -> int:
-    """End of the item starting at `start`: its `;`, or the `}` closing its first top-level brace."""
+    """End of the item, field or arm starting at `start`: its `;` or `,`, the `}` closing its first
+    top-level brace, or the `}` closing the scope it sits in."""
     depth, i = 0, start
     while i < len(text):
         c = text[i]
@@ -94,8 +99,10 @@ def item_end(text: str, start: int) -> int:
             depth += 1
         elif c in ")]":
             depth -= 1
-        elif c == ";" and depth == 0:
+        elif c in ";," and depth == 0:
             return i + 1
+        elif c == "}" and depth == 0:
+            return i
         elif c == "{" and depth == 0:
             braces = 0
             for j in range(i, len(text)):
@@ -108,7 +115,11 @@ def item_end(text: str, start: int) -> int:
 
 
 def drop_cfg_test(text: str) -> str:
-    """Remove every `#[cfg(test)]` item: the attribute, any attributes after it, and the item."""
+    """Remove every `#[cfg(test)]` item (the attribute, any attributes after it, and the item or
+    field), and every inline module whose body opens with `#![cfg(test)]`."""
+    while m := INNER_TEST_MOD.search(text):
+        open_at = text.index("{", m.start())
+        text = text[:m.start()] + " " + text[item_end(text, open_at):]
     while m := CFG_TEST.search(text):
         i = m.end()
         while nxt := re.match(r"\s*#\s*\[", text[i:]):
@@ -135,7 +146,11 @@ def use_paths(tokens: list[str], i: int) -> list[list[str]]:
             if tok == "{":
                 paths, i = [], i + 1
                 while i < len(tokens) and tokens[i] != "}":
-                    sub, i = tree(i)
+                    sub, after = tree(i)
+                    if after == i:
+                        i += 1
+                        continue
+                    i = after
                     paths += [segs + [s for s in p if s != "self"] for p in sub]
                     if i < len(tokens) and tokens[i] == ",":
                         i += 1
@@ -172,7 +187,7 @@ def resolve(path: list[str], here: list[str], modules: dict[str, str]) -> str | 
     if not absolute:
         return None
     if absolute[0] in FOLDER_BAND:
-        if len(absolute) > 1 and absolute[1] in modules:
+        if len(absolute) > 1 and modules.get(absolute[1]) == absolute[0]:
             return absolute[1]
         return absolute[0]
     return absolute[0] if absolute[0] in modules else None
@@ -195,7 +210,7 @@ def upward_edges(root: Path) -> set[tuple[str, str]]:
         rel = p.relative_to(src)
         node = rel.parts[0] if rel.parts[1] == "mod.rs" else rel.parts[1].removesuffix(".rs")
         text = strip_literals(p.read_text())
-        if INNER_CFG_TEST.search(text):
+        if FILE_CFG_TEST.match(text):
             continue
         tokens = TOKEN.findall(drop_cfg_test(text))
         here = module_path(rel)

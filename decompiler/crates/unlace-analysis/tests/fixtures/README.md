@@ -1148,6 +1148,23 @@ partial access whose left side must render as a store
 SHA-256 in `macho_datawidth_arm64.provenance`. Pinned by
 `unlace-cli/tests/name_miss_cli.rs (a_macho_global_reads_by_name_at_its_width)`.
 
+`darwinvarargs_macho_arm64` (arm64 Mach-O, 50 KB, SHA-256
+`8bd5b9dfebb17d9d0ef74b33b165f82ad87a311be71688a22dcc9639517c6cdb`) and
+`darwinvarargs_aarch64` (AArch64 ELF, 1.9 KB, SHA-256
+`80cdf3ffff3868f4fce25ce2441f494f55c125041ab19cdf66434f2c0cedf521`) are built from
+`darwinvarargs.c`: `check` calls `report(fmt, file, line)`, whose body runs
+`va_start`, and `sum9`, whose ninth argument is on the stack. The Mach-O passes
+`file` and `line` at `[sp]` and `[sp+8]` (Apple's variadic rule); the ELF passes
+them in `x1` and `x2` (AAPCS64). Recipe (clang/LLD 22.1.8, no SDK):
+
+    clang -target arm64-apple-macos11 -O2 -g0 -c darwinvarargs.c -o m.o
+    ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -undefined dynamic_lookup \
+             -e _main -o darwinvarargs_macho_arm64 m.o
+    clang -target aarch64-linux-gnu -O2 -g0 -c darwinvarargs.c -o e.o
+    ld.lld --unresolved-symbols=ignore-all -e main -o darwinvarargs_aarch64 e.o
+
+Pinned by `tests/stages/kuna-darwinvarargs.xml`.
+
 `macho_trie_exports_arm64` and `macho_trie_exports_info_arm64` (arm64, 33 KB
 each) are GH #1349's witnesses: dylibs stripped of every `nlist` entry whose export
 trie still names `_audit_exported_function`@`0x328`, `_audit_caller`@`0x340` and
@@ -2107,6 +2124,57 @@ llvm-strip --strip-all -o macho_swift_strsel_arm64 strsel
 `Field.hash(into:)`@`0x100000f1c` (a switch over "serviceItems", "serviceDate",
 "serviceProvider", "odoMeter").
 
+### `macho_oslog_arm64` — Apple unified-logging call sites (`oslog`)
+
+`macho_oslog_arm64` (arm64, ~34 KB) is a self-contained Mach-O whose four
+functions log through `_os_log_impl` the way the SDK's `os_log` macros do, for
+`tests/stages/kuna-oslog.xml`. Source `macho_oslog.c` restates the macro: an
+`os_log_type_enabled` guard, the format string in
+`__TEXT,__oslogstring,cstring_literals`, a buffer filled by clang's
+`__builtin_os_log_format`, and `_os_log_impl(&__dso_handle, log, type, fmt, buf,
+size)`. No SDK is needed; `ld64.lld` keeps the separate literal section only with
+`--separate-cstring-literal-sections`:
+
+```bash
+clang -target arm64-apple-macos11 -O1 -c macho_oslog.c -o oslog.o
+LLD=$(rustc --print sysroot)/lib/rustlib/$(rustc -vV | sed -n 's/host: //p')/bin/gcc-ld/ld64.lld
+"$LLD" -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains -undefined dynamic_lookup \
+       --separate-cstring-literal-sections -e _log_plain -o macho_oslog_arm64 oslog.o
+```
+
+**Pinned VMAs:** `_log_code`@`0x100000418` (one int, 8-byte buffer),
+`_log_pair`@`0x1000004a8` (a long and a string, the string an unaligned store at
+buffer offset 14), `_log_private`@`0x100000554` (a private string and an int),
+`_log_plain`@`0x100000600` (no arguments); the format strings start at
+`0x10000067c` in `__oslogstring`; `__mh_execute_header`@`0x100000000`.
+
+### `macho_objc_stubagree_arm64` — a stub typed only from agreeing declarations
+
+`macho_objc_stubagree_arm64` (arm64, ~50 KB) is the fixture for stub typing
+(`analyzers/objc/kuna_objcrefs.rs (stub_encoding)`, stage test
+`tests/stages/kuna-objcstubagree.xml`). Source `macho_objc_stubagree.m`: protocol
+`Measured` declares `-(double)length` and nothing implements it (`measured`
+references it so its metadata is emitted); root class `Ruler` implements
+`-(double)tag`; `Str` is declared and never implemented, its `length` and `tag`
+returning integers; `validate(s, t, err)` sends `[s length]` and `[t tag]`, each
+routed through a linker stub, and passes each result to the external `check`
+with three more arguments. The `.s` is `clang -S` output with both selref loads
+dropped and each `bl _objc_msgSend` replaced by `bl "_objc_msgSend$<sel>"` (and
+the two `.loh AdrpLdr` lines naming the dropped loads deleted):
+
+```bash
+clang -target arm64-apple-macos11 -fno-objc-arc -O1 -S macho_objc_stubagree.m -o macho_objc_stubagree_arm64.s
+# edit: route the `length` and `tag` sends through `_objc_msgSend$<sel>`
+clang -target arm64-apple-macos11 -c macho_objc_stubagree_arm64.s -o sa.o
+ld64.lld -arch arm64 -platform_version macos 11.0 11.0 -fixup_chains -objc_stubs_fast \
+         -undefined dynamic_lookup -x -e _main -o macho_objc_stubagree_arm64 sa.o
+```
+
+**Pinned VMAs:** `_validate`@`0x1000007e4`, `__objc_stubs`@`0x100000860` (two
+32-byte entries), `__objc_protolist`@`0x100004010`. With `objc on` `validate` reads
+`check(v1,a2,1,"empty name")`; with `option objcsdk
+decompiler/crates/unlace-analysis/tests/fixtures/objc_sdk` (whose `Widget.h` declares
+an `NSInteger tag`) also `check(objc_msgSend$tag(a1),a2,2,"bad tag")`.
 ### `macho_swift_strcmp_arm64` — Swift string literals compared for equality (`swiftstr`)
 
 `macho_swift_strcmp_arm64` (arm64, ~50 KB, stripped) is the fixture for
@@ -3131,6 +3199,50 @@ swift_release(v5); v3 = -1; }`; with symbols, `advance` takes `callfix.Counter
 own `self` to both `fee(for:)` calls. With `swiftcall off` the methods read
 `self` from an unnamed r13, the calls pass none, and `run` returns the throwing
 call's result unchecked.
+
+### `swift_async_elf` — Swift concurrency on a stripped image (`swiftcall`)
+
+`swift_async_elf` (x86-64 ELF, 23 KB, stripped) is the fixture for
+`tests/stages/kuna-swiftconcurrency.xml`. Its source `swift_async_elf.swift`
+has an actor (`Counter`), a class with an `async throws` method (`Loader.fetch`),
+and free `async` functions that suspend on a checked continuation
+(`resumeLater`), two `async let`s (`pair`), a task group (`fan`), an actor hop
+(`hop`) and an unstructured `Task` (`spawn`). Built with the swiftly 6.4.2
+toolchain:
+
+```bash
+swiftc -O -parse-as-library -module-name asyncfix swift_async_elf.swift -o swift_async_syms_elf
+llvm-strip --strip-all -o swift_async_elf swift_async_syms_elf
+```
+
+**Pinned VMAs** (`nm` on the unstripped build): `resumeLater(_:)`@`0x5200`
+with its partials `0x3700` (suspend), `0x37b0` (await) and `0x3800` (the last,
+which frees its frame and returns through the context); `hop(_:_:)`'s first
+partial@`0x4110`, which calls no task runtime; `fan(_:)`'s@`0x3b20`
+(`swift_taskGroup_initialize`, then an `async` call with a fresh context);
+the partial@`0x3b00`, which stores a result and returns. The image has 64 `async` entries and partials (every symbol with an async
+function pointer or a `TQn_` / `TYn_` suffix).
+
+SHA-256: `855697099f5d2e5eca602686f72c9182bfb402ab278b98a303c53de7691bf44e`.
+
+### `swift_runon_elf` — a flow that runs on into an async body (`swiftcall`)
+
+`swift_runon_elf` (x86-64 ELF, 19 KB, symbols kept so the console knows both
+entries) is the fixture for `tests/stages/kuna-swiftasyncextent.xml`. The Swift
+source `swift_runon_elf.swift` gives the image its metadata (a class, an
+`async` function) and calls the two assembly functions of
+`swift_runon_elf.s`: `kuna_pick`, which returns 0 or branches past the
+prologue of `kuna_alloc`, and `kuna_alloc`, which calls `swift_task_alloc` and
+stores the result through r14. Built with the swiftly 6.4.2 toolchain:
+
+```bash
+clang -c swift_runon_elf.s -o runon_asm.o
+swiftc -O -parse-as-library -module-name runon swift_runon_elf.swift runon_asm.o -o swift_runon_elf
+```
+
+**Pinned VMAs:** `kuna_pick`@`0x2c90`, `kuna_alloc`@`0x2ca0`.
+
+SHA-256: `e41ef366f553c61e7fc9e3dcdf65d2011ec053b1f57232cf73344b60d6100553` (a rebuild differs in its build ID and a few other identifier bytes; the pinned VMAs hold).
 
 ### `swift_infer_elf` — Swift functions the metadata does not bind (`swiftcall`)
 

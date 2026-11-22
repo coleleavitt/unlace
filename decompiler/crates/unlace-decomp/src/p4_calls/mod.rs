@@ -44,6 +44,7 @@ pub mod kuna_callsitestackargs;
 pub mod kuna_callwide;
 pub mod kuna_condexeret; // (kuna) a return trial failed only on a path ActionConditionalExe removes gets one more pass
 pub mod kuna_condexeretuse; // (kuna) a use of a returned value on the branch a re-tested condition rules out does not compete
+pub mod kuna_darwinvarargs; // (kuna) a callee running Apple's va_start is variadic at its call sites
 pub mod kuna_dfunaffected;
 pub mod kuna_directalias; // (kuna) a direct access at a known stack offset aliases only the bytes it touches
 pub mod kuna_entryreads; // (kuna) the incoming registers a function's own body reads

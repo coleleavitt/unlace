@@ -94,15 +94,15 @@ fn a_decomp_dbg_from_another_build_is_named_once_on_stderr() {
     assert_eq!(lines.len(), 3, "one three-line warning, got:\n{stderr}");
     assert_eq!(
         lines[0],
-        "warning: decomp_dbg is a different build from this kuna"
+        "warning: decomp_dbg is a different build from this unlace"
     );
     assert!(
-        lines[1].starts_with("  kuna:") && lines[1].contains(identity(ChildKind::Engine)),
+        lines[1].starts_with("  unlace:") && lines[1].contains(identity(ChildKind::Engine)),
         "{stderr}"
     );
     assert!(
-        lines[1].ends_with("/kuna"),
-        "the kuna line must name kuna's path: {stderr}"
+        lines[1].ends_with("/unlace"),
+        "the unlace line must name unlace's path: {stderr}"
     );
     assert_eq!(
         lines[2],
@@ -230,7 +230,7 @@ fn a_decomp_test_dbg_from_another_build_is_named_and_its_results_still_parse() {
     assert_eq!(lines.len(), 3, "{stderr}");
     assert_eq!(
         lines[0],
-        "warning: decomp_test_dbg is a different build from this kuna"
+        "warning: decomp_test_dbg is a different build from this unlace"
     );
     assert!(
         lines[2].ends_with(&format!(

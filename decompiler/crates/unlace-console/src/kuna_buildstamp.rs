@@ -100,16 +100,16 @@ pub fn mismatch_warning(
 ) -> String {
     let kuna = std::env::current_exe()
         .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "kuna".to_string());
-    let width = child_name.len().max("kuna".len()) + 1;
+        .unwrap_or_else(|_| "unlace".to_string());
+    let width = child_name.len().max("unlace".len()) + 1;
     let pinned = pinned_by
         .map(|p| format!(", chosen by {p}"))
         .unwrap_or_default();
     format!(
-        "warning: {child_name} is a different build from this kuna\n\
+        "warning: {child_name} is a different build from this unlace\n\
          \x20 {:<width$} {} {kuna}\n\
          \x20 {:<width$} {theirs} {}{pinned}\n",
-        "kuna:",
+        "unlace:",
         identity(kind),
         format!("{child_name}:"),
         child.display(),
@@ -177,10 +177,10 @@ mod tests {
         assert_eq!(lines.len(), 3, "{text}");
         assert_eq!(
             lines[0],
-            "warning: decomp_dbg is a different build from this kuna"
+            "warning: decomp_dbg is a different build from this unlace"
         );
         assert!(
-            lines[1].starts_with("  kuna:       ")
+            lines[1].starts_with("  unlace:     ")
                 && lines[1].contains(identity(ChildKind::Engine)),
             "{text}"
         );

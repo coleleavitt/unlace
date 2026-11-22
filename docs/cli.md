@@ -150,8 +150,8 @@ answers, and `unlace` prints one warning on stderr naming both, then carries on:
 
 ```
 $ KUNA_DECOMP_DBG=/opt/kuna-v1.329/decomp_dbg unlace decompile ./a.out main
-warning: decomp_dbg is a different build from this kuna
-  kuna:       0.1.0 (source 6cbd2f1a5e1f83af) /home/me/kuna/decompiler/target/release/unlace
+warning: decomp_dbg is a different build from this unlace
+  unlace:     0.1.0 (source 6cbd2f1a5e1f83af) /home/me/unlace/decompiler/target/release/unlace
   decomp_dbg: 1.329 (source 91c04e7d2b3a5f60) /opt/kuna-v1.329/decomp_dbg, chosen by KUNA_DECOMP_DBG
 ```
 

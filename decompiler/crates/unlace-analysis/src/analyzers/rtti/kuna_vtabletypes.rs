@@ -148,6 +148,7 @@ fn facts(rec: &Recovery, names: &HashMap<u64, String>) -> VtableFacts {
             class,
             slots,
             bases,
+            size: 0,
         });
     }
     VtableFacts {

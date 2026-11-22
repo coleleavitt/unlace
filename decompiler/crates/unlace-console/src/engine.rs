@@ -6413,10 +6413,27 @@ fn commit_analysis_output(
     } else {
         (Vec::new(), Vec::new())
     };
+    // (kuna `iokitclasses on`) The IOKit classes are typed like the Itanium
+    // ones, whether or not `vtabletypes` types those.
+    let iokit = if prog.arch().analysis_iokittypes {
+        std::mem::take(&mut out.iokit_cxx)
+    } else {
+        Default::default()
+    };
+    let typed_vtables = prog.arch().analysis_vtabletypes || !iokit.vtables.classes.is_empty();
+    if !prog.arch().analysis_vtabletypes {
+        out.cpp_vtables = Default::default();
+    }
+    out.cpp_vtables
+        .classes
+        .extend(iokit.vtables.classes.iter().cloned());
+    out.cpp_vtables
+        .slot_ranges
+        .extend(iokit.vtables.slot_ranges.iter().copied());
     // (kuna `vtabletypes`) A function a vtable slot holds is a virtual member,
     // so its implicit `this` is certain: an inferred-tier declaration of one
     // that takes `this` is as good as a proven one.
-    if prog.arch().analysis_vtabletypes {
+    if typed_vtables {
         let held: std::collections::HashSet<u64> = out
             .cpp_vtables
             .classes
@@ -6537,7 +6554,7 @@ fn commit_analysis_output(
     //     slot through a constant vtable address folds to the method it holds,
     //     so a call on an object whose vptr store the function can see becomes
     //     a direct call. Painted before the vptr labels are mapped at 1.
-    if prog.arch().analysis_vtabletypes && !out.cpp_vtables.slot_ranges.is_empty() {
+    if typed_vtables && !out.cpp_vtables.slot_ranges.is_empty() {
         let mut ranges = prog.arch().dynreloc_const.as_ref().clone();
         for &(first, last) in &out.cpp_vtables.slot_ranges {
             let begin = Address::new(Rc::clone(code_space), first);
@@ -6616,10 +6633,19 @@ fn commit_analysis_output(
 
     // 1--. (kuna `arm64evcall`) The methods each arm64e virtual call site's slot
     //      can hold; flow reads them when it builds the CALLIND.
+    let meta_slots: std::collections::HashMap<u64, &Vec<u64>> =
+        iokit.meta_slots.iter().map(|(m, s)| (*m, s)).collect();
     for v in &out.vcall_sites {
+        // (kuna `iokitclasses on`) A call on a metaclass object calls the
+        // method that metaclass's own vtable holds.
+        let own = v
+            .object
+            .and_then(|(obj, word)| meta_slots.get(&obj)?.get(word as usize).copied())
+            .filter(|t| v.targets.contains(t));
+        let targets = own.map_or_else(|| v.targets.clone(), |t| vec![t]);
         let call = unlace_decomp::architecture::VcallTargets {
             register: v.register,
-            targets: v.targets.clone(),
+            targets,
         };
         Rc::make_mut(&mut prog.arch_mut().kuna_vcall_targets).insert(v.site, call);
     }
@@ -7725,12 +7751,13 @@ fn commit_analysis_output(
 
     // 5f. (kuna `vtabletypes`) The typed vtables, after every prototype source
     //     above so a slot's function pointer carries the methods' signature.
-    if prog.arch().analysis_vtabletypes {
+    if typed_vtables {
         unlace_decomp::kuna_vtabletypes::install(
             prog.arch(),
             code_space,
             &out.cpp_vtables.classes,
         )?;
+        crate::kuna_iokittypes::commit(prog, code_space, &iokit)?;
     }
 
     // 5e. (kuna `importvote`) The call sites of every PLT import, read by the

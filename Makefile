@@ -91,6 +91,7 @@ test-cli:
 
 test-tools:
 	$(PYTHON) $(ROOT)/scripts/check_test_layout.py
+	$(PYTHON) $(ROOT)/scripts/check_layers.py
 	PYTHONPATH=$(ROOT) $(PYTHON) -m unittest discover -s $(ROOT)/scripts/tests -p 'test_*.py'
 
 # Print the repo version as MAJOR.MINOR (VERSION file + release count -- the

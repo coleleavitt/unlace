@@ -116,8 +116,12 @@ make test          # datatest corpus vs docs/baseline.json      → PARITY OK 67
 make test-stages   # stage-issue corpus vs baseline-stages.json  → PARITY OK
 make rust-test     # full cargo workspace suite + options.md freshness  → green
 make check-spec    # docs/spec anchors + phase-folder ownership resolve → green
-make test-tools    # Python tooling unit tests (CI-required)
+make test-tools    # Python tooling unit tests + module layering ratchet (CI-required)
 ```
+`scripts/check_layers.py` (run by `make test-tools`) fails on a new module path (`crate::`, `super::`, `self::`) from a lower
+band of unlace-decomp to a higher one (middle < lift < structure < bandb < emit < driver; the
+bands are listed in the script). Invert the dependency instead of adding it to
+`scripts/layers-allowlist.txt`; that list only shrinks.
 CI runs all four + `unlace catalog --check` + `make lint` (Clippy = errors in CLI/base/num) on
 push to main. On a PR from a branch in this repo the workspace suite is skipped — **you are
 the gate for `make rust-test`** (or add the `full-ci` label). Workspace integration tests

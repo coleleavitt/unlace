@@ -22,9 +22,11 @@
 //! never discovered).
 
 mod a64;
+mod cxx;
 pub mod osclassinfo;
 mod tables;
 
+pub use cxx::IokitCxxFacts;
 pub use osclassinfo::OsClassInfoPass;
 pub use tables::XnuTablesPass;
 
@@ -71,7 +73,11 @@ impl AnalysisPass for IokitClassesPass {
         }
         let img = MachoImage::with_fixups(ctx.file, resolve_chained_fixups(ctx.file, ctx.bytes));
         let classes = recover(ctx.file, &img);
-        classes.emit(&mut out);
+        let typed = ctx.arch.analysis_iokittypes;
+        classes.emit(&mut out, typed);
+        if typed {
+            out.iokit_cxx = classes.cxx_facts(&classes.known_names());
+        }
         out
     }
 }
@@ -206,7 +212,7 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
     let inits = init_functions(file, img);
     let traces: Vec<Vec<Event>> = inits
         .iter()
-        .map(|&f| a64::trace(img, f, INIT_BUDGET, None))
+        .map(|&f| a64::trace(img, f, INIT_BUDGET, &[]))
         .collect();
 
     let mut votes: BTreeMap<u64, usize> = BTreeMap::new();
@@ -226,10 +232,12 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
         return rec;
     };
     rec.ctor = Some(ctor);
+    let candidates: Vec<u64> = votes.keys().copied().collect();
     let traces: Vec<Vec<Event>> = inits
         .iter()
-        .map(|&f| a64::trace(img, f, INIT_BUDGET, Some(ctor)))
+        .map(|&f| a64::trace(img, f, INIT_BUDGET, &candidates))
         .collect();
+    let ctors = constructors(img, &Code::new(file), &traces, ctor, &candidates);
 
     let mut seen = std::collections::HashSet::new();
     for events in &traces {
@@ -238,7 +246,7 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
             let (Some(meta), Some(name_ptr), Some(size)) = (c.args[0], c.args[1], c.args[3]) else {
                 continue;
             };
-            if c.target != ctor || !seen.insert(meta) {
+            if !ctors.contains(&c.target) || !seen.insert(meta) {
                 continue;
             }
             let Some(name) = class_name(img, name_ptr) else {
@@ -246,7 +254,7 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
             };
             let meta_vtable = events[i + 1..]
                 .iter()
-                .take_while(|e| !matches!(e, Event::Call(n) if n.target == ctor))
+                .take_while(|e| !matches!(e, Event::Call(n) if ctors.contains(&n.target)))
                 .find_map(|e| match e {
                     Event::Store(s) if s.addr == meta => Some(s.value),
                     _ => None,
@@ -263,6 +271,47 @@ fn recover_with(file: &object::File, img: &MachoImage, names: HashMap<u64, Strin
     }
     rec.find_vtables(file, img);
     rec
+}
+
+/// `ctor` and every other overload of the metaclass constructor among
+/// `candidates` (the one a class with its own zone registers through takes
+/// three more arguments): a callee one of whose class-shaped calls is followed,
+/// before the next call, by the store of a vtable into the object it built.
+fn constructors(
+    img: &MachoImage,
+    code: &Code,
+    traces: &[Vec<Event>],
+    ctor: u64,
+    candidates: &[u64],
+) -> Vec<u64> {
+    let mut out = vec![ctor];
+    for events in traces {
+        for (i, ev) in events.iter().enumerate() {
+            let Event::Call(c) = ev else { continue };
+            let [Some(meta), Some(name), _, Some(_)] = c.args else {
+                continue;
+            };
+            if out.contains(&c.target)
+                || !candidates.contains(&c.target)
+                || class_name(img, name).is_none()
+            {
+                continue;
+            }
+            let stored = events[i + 1..]
+                .iter()
+                .take_while(|e| !matches!(e, Event::Call(_)))
+                .any(|e| match e {
+                    Event::Store(s) => {
+                        s.addr == meta && img.read_ptr(s.value).is_some_and(|p| code.slot(p))
+                    }
+                    _ => false,
+                });
+            if stored {
+                out.push(c.target);
+            }
+        }
+    }
+    out
 }
 
 impl Recovered {
@@ -483,7 +532,10 @@ impl Recovered {
         out
     }
 
-    fn emit(&self, out: &mut AnalysisOutput) {
+    /// Emit the names and entries. When the classes are `typed`, a class's
+    /// `vtable for X` covers only its two header words: the slots from the
+    /// address point on are the typed `X_vtable` the commit installs.
+    fn emit(&self, out: &mut AnalysisOutput, typed: bool) {
         let meta_size = self.meta_size();
         let mut data = |addr: u64, name: String, size: u32| {
             if !self.names.contains_key(&addr) {
@@ -493,11 +545,12 @@ impl Recovered {
         for c in &self.classes {
             data(c.meta, format!("{}::gMetaClass", c.name), meta_size);
             if let Some((slot0, slots)) = &c.vtable {
-                data(
-                    slot0 - 16,
-                    format!("vtable for {}", c.name),
-                    16 + 8 * slots.len() as u32,
-                );
+                let size = if typed {
+                    16
+                } else {
+                    16 + 8 * slots.len() as u32
+                };
+                data(slot0 - 16, format!("vtable for {}", c.name), size);
             }
             if let Some(slots) = c.meta_vtable.and_then(|v| self.meta_vtables.get(&v)) {
                 data(

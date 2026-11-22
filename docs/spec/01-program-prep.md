@@ -12347,7 +12347,10 @@ dispatcher's own successors, so no gap entry is planted on them: cmark-gfm's
 re2c scanner `_scan_html_block_start` listed as 104 bytes plus five `sub_`
 functions is one function of 4,484 bytes, and the framework's 442 functions
 are 407, the 35 case bodies gone; the Swift `AssetItem` copy helper of a
-13 KB iOS app function keeps its 27-case enum dispatch.
+13 KB iOS app function keeps its 27-case enum dispatch. The `compacttable_aarch64`
+fixture pins clang's byte table (`ldrb; adr; add x10,x10,x11,lsl #2; br x10`):
+every case callee has `dispatch` as caller in `unlace xrefs`
+(`decompiler/crates/unlace-cli/tests/xrefs_switch_case_calls.rs`).
 
 (kuna, GH-299) **Bounded i386 switch coverage** (`x86listingswitch`, default-off;
 `decompiler/crates/unlace-analysis/src/listing/kuna_x86listingswitch.rs`) extends
